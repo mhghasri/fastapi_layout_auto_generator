@@ -1,0 +1,201 @@
+#!/usr/bin/env bash
+set -e
+
+COMMAND=$1
+SUBCOMMAND=$2
+
+case "$COMMAND" in
+  run)
+    case "$SUBCOMMAND" in
+      project)
+        echo "🚀 Initializing FastAPI project..."
+
+        echo "🔹 Creating virtual environment"
+        python3 -m venv venv
+	source venv/bin/activate
+
+        echo "🔹 Installing FastAPI and dependencies"
+        pip install "fastapi[all]"
+        pip install sqlalchemy
+        pip install alembic
+
+        echo "🔹 Creating main.py"
+        cat <<EOF > main.py
+'''
+core file for start app
+'''
+
+from fastapi import Body, FastAPI, Query, status, HTTPException, Path, UploadFile, File, Depends
+
+app = FastAPI()
+
+'''
+╭──────────────────────────────────────────────╮
+│                  Import Routers              │
+╰──────────────────────────────────────────────╯
+'''
+
+EOF
+
+        echo "🔹 Creating .env and .env.example"
+        touch .env .env.example
+
+        echo "🔹 Creating .gitignore"
+        cat <<EOF > .gitignore
+__pycache__
+venv
+.env
+.env.example
+.dockerignore
+*.log
+.idea
+.vscode
+EOF
+
+        echo "🔹 Creating Dockerfile"
+        touch Dockerfile
+
+        echo "🔹 Creating docker-compose.yaml"
+        touch docker-compose.yaml
+
+        echo "🔹 Creating .dockerignore"
+        cat <<EOF > .dockerignore
+__pycache__
+venv
+.env
+.dockerignore
+EOF
+
+        echo "🔹 Creating README.md"
+        touch README.md
+
+        echo "🔹 Freezing requirements"
+        pip freeze > requirements.txt
+
+        echo "🔹 Creating config module"
+        mkdir -p config
+        touch config/__init__.py
+
+        echo "🔹 Creating config/config.py"
+        cat <<'EOF' > config/config.py
+'''
+set enviroment settings
+'''
+
+'''
+╭──────────────────────────────────────────────╮
+│                  Import Modules              │
+╰──────────────────────────────────────────────╯
+'''
+
+from pydantic_settings import BaseSettings
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+
+'''
+╭──────────────────────────────────────────────╮
+│                   Settings                   │
+╰──────────────────────────────────────────────╯
+'''
+
+class Settings(BaseSettings):
+    SQLALCHEMY_DATABASE_URL: str
+
+    model_config = {
+        "env_file": BASE_DIR / ".env",
+        "env_file_encoding": "utf-8",
+    }
+
+settings = Settings()
+EOF
+
+        echo "🔹 Creating config/database.py"
+        cat <<'EOF' > config/database.py
+'''
+data base config
+'''
+
+'''
+╭──────────────────────────────────────────────╮
+│                  Import Modules              │
+╰──────────────────────────────────────────────╯
+'''
+from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy import create_engine
+from . config import settings
+
+
+engine = create_engine(
+    settings.SQLALCHEMY_DATABASE_URL,                    # database adress
+    pool_pre_ping=True,                                  
+)
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+Base = declarative_base()
+
+session = SessionLocal()
+
+def get_db():
+    db = SessionLocal()
+
+    try:
+        yield db
+
+    finally:
+        db.close()
+EOF
+
+	mkdir -p alembic
+	cd alembic || exit 1
+	alembic init migrations
+
+	ENV_FILE="migrations/env.py"
+
+	echo "🔹 Patching Alembic env.py"
+
+	# 1️⃣ اضافه کردن import ها (بدون indent)
+	grep -q "from config.config import settings" "$ENV_FILE" || \
+	sed -i '/from alembic import context/a\
+from config.config import settings\
+from config.database import Base\
+	' "$ENV_FILE"
+
+	# 2️⃣ جایگزینی target_metadata = None با بلاک تمیز
+	awk '
+	/^target_metadata = None$/ {
+	    print "database_url = settings.SQLALCHEMY_DATABASE_URL.replace(\"%\", \"%%\")"
+	    print ""
+	    print "config.set_main_option("
+	    print "    \"sqlalchemy.url\","
+	    print "    database_url,"
+	    print ")"
+	    print ""
+	    print "target_metadata = Base.metadata"
+	    next
+	}
+	{ print }
+	' "$ENV_FILE" > /tmp/env.py && mv /tmp/env.py "$ENV_FILE"
+
+	cd ..
+
+
+
+        echo "✅ FastAPI project initialized successfully"
+        ;;
+      *)
+        echo "❌ Unknown subcommand"
+        exit 1
+        ;;
+    esac
+    ;;
+  *)
+    echo "❌ Unknown command"
+    exit 1
+    ;;
+esac
+
+

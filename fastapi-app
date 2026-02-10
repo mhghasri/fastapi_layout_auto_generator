@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+
+set -e
+
+COMMAND="$1"
+APP_NAME="$2"
+
+if [[ "$COMMAND" != "startapp" || -z "$APP_NAME" ]]; then
+    echo "❌ Usage: fastapi startapp <app_name>"
+    exit 1
+fi
+
+APP_DIR="$APP_NAME"
+
+if [[ -d "$APP_DIR" ]]; then
+    echo "❌ Directory '$APP_NAME' already exists"
+    exit 1
+fi
+
+echo "🚀 Creating FastAPI app: $APP_NAME"
+
+mkdir -p "$APP_DIR"
+
+# __init__.py
+touch "$APP_DIR/__init__.py"
+
+# models.py
+cat << 'EOF' > "$APP_DIR/models.py"
+'''
+╭──────────────────────────────────────────────╮
+│                  Import Modules              │
+╰──────────────────────────────────────────────╯
+'''
+
+from sqlalchemy import Column, Integer, String
+from sqlalchemy.orm import relationship
+from config.database import Base
+from sqlalchemy.sql import func
+
+'''
+╭──────────────────────────────────────────────╮
+│                   Model class                │
+╰──────────────────────────────────────────────╯
+'''
+EOF
+
+# schemas.py
+cat << 'EOF' > "$APP_DIR/schemas.py"
+'''
+╭──────────────────────────────────────────────╮
+│                 Import Modules               │
+╰──────────────────────────────────────────────╯
+'''
+
+from pydantic.networks import EmailStr
+from pydantic import BaseModel
+EOF
+
+# routers.py
+cat << 'EOF' > "$APP_DIR/routers.py"
+'''
+╭──────────────────────────────────────────────╮
+│                  Import Modules              │
+╰──────────────────────────────────────────────╯
+'''
+
+from config.database import get_db
+from fastapi import Depends
+from . schemas import *
+from typing import List
+from . models import *
+from main import app
+EOF
+
+# services.py
+cat << 'EOF' > "$APP_DIR/services.py"
+''' This File is logic of app '''
+EOF
+
+# tests.py
+cat << 'EOF' > "$APP_DIR/tests.py"
+''' This File is for test of app '''
+EOF
+
+echo "✅ FastAPI app '$APP_NAME' created successfully"
